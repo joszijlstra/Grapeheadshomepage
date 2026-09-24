@@ -126,3 +126,54 @@ def test_record_loop_splits_takes_on_silence(tmp_path, monkeypatch):
     recorder.record("Fake Piano", tmp_path, silence=0.2, on_saved=on_saved, log=lambda *_: None)
     assert len(saved) == 2
     assert [n.pitch for n in load_song(saved[1]).tracks[0].notes] == [61, 65, 68]
+
+
+class FakeOut:
+    def __init__(self):
+        self.sent = []
+        self.closed = False
+
+    def send(self, msg):
+        self.sent.append(msg)
+
+    def close(self):
+        self.closed = True
+
+
+def test_play_song_sends_notes_in_order_and_cleans_up():
+    from pianotool.player import play_song
+
+    out = FakeOut()
+    song = Song(bpm=120.0, tracks=[
+        Track("Piano (jouw take)", c_major_scale(), program=0),
+        Track("Drums", [Note(36, 0.0, 0.1, 100, 9)], channel=9),
+    ])
+    sent = play_song(song, "Fake", tracks=["piano"], open_output=lambda *a, **k: out,
+                     sleep=lambda s: None, log=lambda *_: None)
+    notes_on = [m.note for m in out.sent if m.type == "note_on"]
+    assert notes_on == [60, 62, 64, 65, 67, 69, 71, 72]  # drums niet meegestuurd
+    assert sent == 1 + 16  # program change + note on/off
+    assert out.sent[-1].control == 123 and out.closed  # alle noten uit na afloop
+
+
+def test_play_virtual_port_opens_virtual():
+    from pianotool.player import VIRTUAL_PORT_NAME, play_song
+
+    calls = []
+
+    def opener(name, **kw):
+        calls.append((name, kw))
+        return FakeOut()
+
+    play_song(Song(120.0, [Track("P", c_major_scale())]), virtual=True, open_output=opener,
+              sleep=lambda s: None, log=lambda *_: None)
+    assert calls == [(VIRTUAL_PORT_NAME, {"virtual": True})]
+
+
+def test_cli_parses_all_commands():
+    from pianotool.cli import build_parser
+
+    p = build_parser()
+    assert p.parse_args(["record", "--playback", "--virtual"]).playback
+    assert p.parse_args(["play", "x.mid", "--track", "Piano", "--track", "Bas"]).track == ["Piano", "Bas"]
+    assert p.parse_args(["arrange", "x.mid", "--bars", "16"]).bars == 16

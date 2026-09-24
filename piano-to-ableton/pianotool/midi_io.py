@@ -64,7 +64,7 @@ def ticks_to_seconds(ticks: int, bpm: float) -> float:
     return ticks / PPQ * 60.0 / bpm
 
 
-def _track_to_events(track: Track, bpm: float) -> list[tuple[int, int, mido.Message]]:
+def track_events(track: Track, bpm: float) -> list[tuple[int, int, mido.Message]]:
     """Zet een track om naar (tick, volgorde, bericht)-tuples.
 
     De volgorde zorgt dat op dezelfde tick eerst note_offs komen, zodat een
@@ -109,7 +109,7 @@ def save_song(song: Song, path: str | Path) -> Path:
         mt = mido.MidiTrack()
         mt.append(mido.MetaMessage("track_name", name=track.name, time=0))
         last = 0
-        for tick, _, msg in _track_to_events(track, song.bpm):
+        for tick, _, msg in track_events(track, song.bpm):
             mt.append(msg.copy(time=tick - last))
             last = tick
         mt.append(mido.MetaMessage("end_of_track", time=0))

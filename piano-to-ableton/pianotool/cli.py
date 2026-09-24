@@ -19,17 +19,35 @@ def _notes(song: Song):
 
 
 def cmd_ports(args) -> int:
+    from .player import find_output_port, list_outputs
     from .recorder import find_piano_port, list_inputs
 
     names = list_inputs()
     if not names:
         print("Geen MIDI-ingangen gevonden. Is de piano aangesloten en aangezet?")
         return 1
+    print("Ingangen (opnemen):")
     auto = find_piano_port()
     for name in names:
-        print(f"{'→' if name == auto else ' '} {name}")
-    print("\n→ = wordt automatisch gekozen. Andere keuze? Gebruik --port \"deel van de naam\".")
+        print(f"  {'→' if name == auto else ' '} {name}")
+    print("Uitgangen (naspelen):")
+    auto = find_output_port()
+    for name in list_outputs():
+        print(f"  {'→' if name == auto else ' '} {name}")
+    print("\n→ = wordt automatisch gekozen. Andere keuze? Gebruik --port / --to \"deel van de naam\".")
     return 0
+
+
+def _player(args):
+    """Geeft een functie terug die een Song naspeelt volgens --to / --virtual."""
+    from .player import find_output_port, play_song
+
+    if args.virtual:
+        return lambda song: play_song(song, virtual=True, tracks=args.track)
+    port = find_output_port(args.to)
+    if not port:
+        raise RuntimeError("Geen MIDI-uitgang gevonden. Gebruik --virtual om via GarageBand/Logic/Ableton af te spelen.")
+    return lambda song: play_song(song, port, tracks=args.track)
 
 
 def _arrange_and_save(take: Song, take_path: Path, args) -> Path:
@@ -66,6 +84,7 @@ def cmd_record(args) -> int:
     record(
         port,
         Path(args.out).expanduser(),
+        playback=_player(args) if args.playback else None,
         bpm=args.bpm or 120.0,
         silence=args.silence,
         lead_in=args.lead_in,
@@ -83,6 +102,20 @@ def cmd_analyze(args) -> int:
     info["bpm_geschat"] = estimate_bpm(notes)
     for k, v in info.items():
         print(f"{k:>16}: {v}")
+    return 0
+
+
+def latest_take(folder: Path) -> Path:
+    takes = sorted(folder.glob("take_*.mid"), key=lambda p: p.stat().st_mtime)
+    if not takes:
+        raise RuntimeError(f"Nog geen takes gevonden in {folder}")
+    return takes[-1]
+
+
+def cmd_play(args) -> int:
+    path = latest_take(DEFAULT_DIR) if args.file == "laatste" else Path(args.file).expanduser()
+    print(f"♪ {path.name}")
+    _player(args)(load_song(path))
     return 0
 
 
@@ -104,6 +137,13 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"],
                         help="hoe hard Claude nadenkt (hoger = beter maar trager/duurder)")
 
+    def play_options(sp):
+        sp.add_argument("--to", help="(deel van) de naam van de MIDI-uitgang; standaard de piano")
+        sp.add_argument("--virtual", action="store_true",
+                        help="speel af via virtuele poort 'Pianotool' (GarageBand/Logic/Ableton, Mac-speakers)")
+        sp.add_argument("--track", action="append",
+                        help="alleen tracks waarvan de naam dit bevat (herhaalbaar, bv. --track Piano)")
+
     r = sub.add_parser("record", help="neem op; elke take wordt automatisch een .mid-bestand")
     r.add_argument("--port", help="(deel van) de naam van de MIDI-ingang; standaard automatisch")
     r.add_argument("--out", default=str(DEFAULT_DIR), help=f"map voor de takes (standaard {DEFAULT_DIR})")
@@ -112,8 +152,15 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--lead-in", type=float, default=0.0, help="seconden stilte vóór de eerste noot")
     r.add_argument("--min-notes", type=int, default=3, help="kortere takes worden weggegooid")
     r.add_argument("--arrange", action="store_true", help="laat elke take direct door Claude arrangeren")
+    r.add_argument("--playback", action="store_true", help="speel elke take direct na")
     ai_options(r)
+    play_options(r)
     r.set_defaults(func=cmd_record)
+
+    pl = sub.add_parser("play", help="speel een take of arrangement na (op de piano of via de Mac)")
+    pl.add_argument("file", help="een .mid-bestand, of 'laatste' voor de nieuwste take")
+    play_options(pl)
+    pl.set_defaults(func=cmd_play)
 
     a = sub.add_parser("analyze", help="toonsoort, tempo en bereik van een .mid-bestand")
     a.add_argument("file")

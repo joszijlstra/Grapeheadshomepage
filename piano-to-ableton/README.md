@@ -11,36 +11,45 @@ pads en tegenmelodieën. Ook dat is gewoon MIDI, dus alles blijft te bewerken in
                       └──▶ take_20260924_201512_arrangement.mid  (compleet stuk, één track per instrument)
 ```
 
-## 1. Installeren (eenmalig)
+## 1. Installeren op je MacBook (eenmalig)
 
-Je hebt [Python 3.10 of nieuwer](https://www.python.org/downloads/) nodig.
+1. Installeer Python 3.12, bijvoorbeeld met [Homebrew](https://brew.sh): `brew install python@3.12`
+   (of download "Python 3.12" op [python.org](https://www.python.org/downloads/macos/)).
+   De Python die bij macOS zit is te oud.
+2. Dubbelklik in de Finder op `mac/Installeren.command`.
+   Geeft macOS een waarschuwing, klik dan met rechts → *Open*.
 
-```bash
-cd piano-to-ableton
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+In de map `mac/` staan daarna drie starters om te dubbelklikken:
+
+| Bestand | Wat het doet |
+|---|---|
+| `Installeren.command` | eenmalige installatie |
+| `Piano opnemen.command` | luistert naar de piano en bewaart elke melodie |
+| `Laatste take naspelen.command` | de piano speelt je laatste opname na |
+
+Liever de Terminal? Alles kan ook met `.venv/bin/python -m pianotool …` (zie hieronder).
 
 ## 2. Piano aansluiten
 
-- De meeste digitale piano's hebben een **USB-B-poort ("USB to Host")**: een gewone
-  USB-printerkabel naar je laptop is genoeg, geen driver nodig (class compliant).
-- Heeft je piano alleen 5-pins **MIDI OUT**, gebruik dan een USB-MIDI-interface
-  (bv. Roland UM-ONE of M-Audio Uno).
+- De meeste digitale piano's hebben een **USB-B-poort ("USB to Host")**. Een
+  USB-B-naar-USB-C-kabel naar je MacBook is genoeg. Een driver heb je niet nodig,
+  macOS herkent de piano vanzelf.
+- Heeft je piano alleen 5-pins **MIDI IN/OUT**, gebruik dan een USB-MIDI-interface
+  (bv. Roland UM-ONE). Voor naspelen moeten dan beide kabels (IN en OUT) aangesloten zijn.
 
 Controleer of de piano herkend wordt:
 
 ```bash
-python -m pianotool ports
+.venv/bin/python -m pianotool ports
 ```
 
-De poort met een `→` wordt automatisch gekozen.
+Je ziet de ingangen (opnemen) en uitgangen (naspelen); die met `→` worden automatisch gekozen.
+Zie je niets, kijk dan in *Audio MIDI-configuratie* → *Venster* → *Toon MIDI-studio*.
 
-## 3. Opnemen
+## 3. Opnemen en naspelen
 
 ```bash
-python -m pianotool record --bpm 90
+.venv/bin/python -m pianotool record --bpm 90
 ```
 
 - De opname start vanzelf bij de eerste toets.
@@ -48,14 +57,33 @@ python -m pianotool record --bpm 90
   opgeslagen in `~/Music/Piano Takes/` en wacht het programma op de volgende.
 - Aanslag (velocity) en sustainpedaal worden meeopgenomen. Stoppen met **Ctrl+C**.
 
-Handige opties:
+**Naspelen:**
+
+```bash
+.venv/bin/python -m pianotool play laatste                # de piano speelt je laatste take na
+.venv/bin/python -m pianotool play take_….mid             # een bepaalde take of arrangement
+.venv/bin/python -m pianotool play arr.mid --virtual      # via GarageBand/Logic/Ableton, over de Mac-speakers
+.venv/bin/python -m pianotool play arr.mid --track Piano  # alleen bepaalde tracks
+```
+
+- Op de piano speelt de piano zelf, met zijn eigen klank en speakers. Je ziet het ook
+  op de toetsen bij piano's met verlichte toetsen.
+- Met `--virtual` maakt het programma een MIDI-poort "Pianotool" aan. Open
+  GarageBand (gratis op elke Mac) met een instrumenttrack en je hoort het via je
+  MacBook. In Ableton zet je bij een MIDI-track *MIDI From* op "Pianotool". Zo hoor
+  je een arrangement met drums, bas en strijkers in één keer.
+- Speel je een arrangement naar de piano, dan speelt de piano alle partijen met
+  pianoklank. Met `--track` kies je welke partijen.
+
+Handige opties voor `record`:
 
 | Optie | Betekenis |
 |---|---|
 | `--bpm 90` | het tempo waarin je (ongeveer) speelt; zet Ableton op hetzelfde tempo |
+| `--playback` | elke take direct laten naspelen (de echo wordt niet opnieuw opgenomen) |
 | `--silence 6` | pas na 6 s stilte een nieuwe take |
 | `--out "pad/naar/map"` | andere opslagmap |
-| `--port "Yamaha"` | een specifieke MIDI-ingang kiezen |
+| `--port "Yamaha"` / `--to "Yamaha"` | een specifieke MIDI-ingang / -uitgang kiezen |
 | `--arrange` | elke take direct door de AI laten uitwerken (zie 5) |
 
 ## 4. In Ableton Live
@@ -69,7 +97,7 @@ Handige opties:
    MIDI-klanken; de tracknamen vertellen wat bedoeld is).
 
 > Tip: speelde je zonder metronoom, gebruik dan in Ableton *Quantize* (Ctrl/Cmd+U)
-> of kijk met `python -m pianotool analyze take.mid` wat het geschatte tempo is.
+> of kijk met `.venv/bin/python -m pianotool analyze take.mid` wat het geschatte tempo is.
 
 ## 5. AI: een compleet muziekstuk maken
 
@@ -77,18 +105,19 @@ Maak een API-sleutel aan op [console.anthropic.com](https://console.anthropic.co
 en zet die in je omgeving:
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."     # Windows (PowerShell): $env:ANTHROPIC_API_KEY="sk-ant-..."
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc   # daarna een nieuw Terminal-venster openen
 ```
 
 Dan een bestaande take laten uitwerken:
 
 ```bash
-python -m pianotool arrange ~/Music/"Piano Takes"/take_20260924_201512.mid \
+.venv/bin/python -m pianotool arrange ~/Music/"Piano Takes"/take_20260924_201512.mid \
     --style "melancholische indie-pop, 80 bpm feel, piano, strijkers, lichte drums" \
     --bars 48
 ```
 
-Of direct tijdens het spelen: `python -m pianotool record --bpm 90 --arrange --style "..."`.
+Of direct tijdens het spelen: `.venv/bin/python -m pianotool record --bpm 90 --arrange --style "..."`.
+Beluisteren: `.venv/bin/python -m pianotool play …_arrangement.mid --virtual`.
 
 Wat je terugkrijgt:
 
@@ -109,6 +138,8 @@ denkt het model langer na.
 | **Deze tool (Claude)** | schrijft volledig arrangement om je MIDI heen | MIDI, per instrument | je wilt zelf in Ableton produceren en alles kunnen aanpassen |
 | **[Suno Studio 2.0](https://suno.com/blog/studio-2)** | importeert je `.mid` en gebruikt de clip als prompt voor nieuwe audio-stems; kan ook zang toevoegen | audio (WAV-stems) + MIDI-export | je wilt snel een af, geproduceerd nummer *met klank*, ook met zang |
 | **[MIDI Agent](https://www.midiagent.com/ai-midi-generator-for-ableton-live)** | plugin in Ableton; genereert akkoorden, bas, drums, varianten en vervolgen op basis van je MIDI (werkt met o.a. Claude/ChatGPT) | MIDI, binnen Ableton | je wilt de AI rechtstreeks in je Ableton-set |
+| **[Logic Pro Session Players](https://support.apple.com/guide/logicpro/session-players-overview-lgcpbf624405/mac)** (Mac) | AI-drummer, -bassist, -toetsenist en -strijkers spelen mee met de akkoorden van je melodie; Logic kan ook akkoorden uit je MIDI halen | MIDI per speler | je wilt een realistische "band" om je piano heen op je Mac |
+| **[AIVA](https://www.aiva.ai/)** | gebruikt je MIDI (vanaf 8 maten) als "influence" en componeert een nieuw, volledig stuk in die stijl | MIDI, WAV, MP3 | filmische/klassieke stukken; let op: het wordt een *nieuw* stuk, niet jouw melodie |
 | **Ableton Live 12 MIDI Tools** (Seed, Stacks, Shape…) | algoritmische variaties op clips | MIDI | snelle variaties; let op: geen echte AI |
 
 **Aanbevolen werkwijze:**
@@ -120,17 +151,17 @@ denkt het model langer na.
 
 ## Probleemoplossing
 
-- **"Geen piano gevonden"**: piano aan? Andere USB-kabel/poort proberen; op
-  macOS in *Audio MIDI-configuratie* → *MIDI-studio* kijken of hij verschijnt.
+- **"Geen piano gevonden"**: piano aan? Andere USB-kabel of -poort proberen (sommige
+  kabels laden alleen op), en in *Audio MIDI-configuratie* → *MIDI-studio* kijken of hij verschijnt.
+- **Naspelen geeft geen geluid**: staat *Local Control* aan en het volume open? Sommige
+  piano's hebben een instelling "MIDI In" of "USB MIDI" die aan moet.
 - **Takes worden te vroeg afgebroken**: verhoog `--silence`.
-- **Ableton gebruikt de piano tegelijk**: dat mag; beide programma's kunnen
-  op macOS dezelfde MIDI-ingang lezen. Op Windows kan een poort soms maar door één
-  programma geopend worden; sluit dan Ableton tijdens het opnemen of gebruik
-  [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html).
+- **Ableton gebruikt de piano tegelijk**: dat mag; op macOS kunnen meerdere
+  programma's dezelfde piano tegelijk gebruiken.
 
 ## Ontwikkelen
 
 ```bash
-pip install pytest
-python -m pytest
+.venv/bin/pip install pytest
+.venv/bin/python -m pytest
 ```

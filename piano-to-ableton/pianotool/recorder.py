@@ -107,6 +107,7 @@ def record(
     lead_in: float = 0.0,
     min_notes: int = 3,
     on_saved: Callable[[Path, Song], None] | None = None,
+    playback: Callable[[Song], None] | None = None,
     log: Callable[[str], None] = print,
 ) -> None:
     """Luister op ``port_name`` en sla elke take op in ``out_dir``. Stop met Ctrl+C.
@@ -115,6 +116,8 @@ def record(
     ``lead_in``: stilte (seconden) vóór de eerste noot in het bestand, handig als
     je de clip in Ableton op een maatstreep wilt laten beginnen.
     ``min_notes``: takes met minder noten (bv. per ongeluk een toets geraakt) worden weggegooid.
+    ``playback``: wordt na elke take aangeroepen om hem na te spelen; wat er tijdens
+    het naspelen binnenkomt (bv. echo van de piano) wordt niet opgenomen.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     inbox: queue.Queue[tuple[mido.Message, float]] = queue.Queue()
@@ -136,6 +139,10 @@ def record(
             return
         path = save_song(song, take_filename(out_dir))
         log(f"✔ Opgeslagen: {path}  ({count} noten, {song.duration:.1f} s)")
+        if playback:
+            playback(song)
+            while not inbox.empty():  # echo van het naspelen niet als nieuwe take zien
+                inbox.get_nowait()
         if on_saved:
             on_saved(path, song)
 
